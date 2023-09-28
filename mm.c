@@ -1,7 +1,7 @@
 /*
  * mm.c
  *
- * Name: [FILL IN]
+ * Name: Andrew Latini
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
@@ -61,8 +61,12 @@ static size_t align(size_t x)
  */
 bool mm_init(void)
 {
-    /* IMPLEMENT THIS */
-    return true;
+    	/* IMPLEMENT THIS */
+    	void* ptr = mem_sbrk(256);	// allocate inital space for heap
+	if (ptr==-1)			// check if failed
+		return false;
+	else
+    		return true;		// return success
 }
 
 /*
@@ -70,8 +74,16 @@ bool mm_init(void)
  */
 void* malloc(size_t size)
 {
-    /* IMPLEMENT THIS */
-    return NULL;
+	if (size == 0)			// if size is 0, return NULL
+		return NULL;
+	if (size+mem_brk>) {		// if size requesting to be allocating is larger than heap size, allocate more space for heap
+		
+	}
+		
+		
+  	void* ptr;		// returns pointer to memory block of at least size bytes on success
+	
+  	return ptr;
 }
 
 /*
