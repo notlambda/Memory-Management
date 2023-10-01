@@ -1,7 +1,7 @@
 /*
  * mm.c
  *
- * Name: [FILL IN]
+ * Name: Anh Nguyen
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
@@ -62,6 +62,7 @@ static size_t align(size_t x)
 bool mm_init(void)
 {
     /* IMPLEMENT THIS */
+    
     return true;
 }
 
@@ -69,8 +70,29 @@ bool mm_init(void)
  * malloc
  */
 void* malloc(size_t size)
-{
+{   
+
+    uint64_t aligned_size;
     /* IMPLEMENT THIS */
+    if (size == 0) {
+        return NULL;
+    }
+
+    int i;  
+    int tracker = 0;
+    int head
+    
+    if (size > 16) {
+        aligned_size = align(size);
+    } else {
+        aligned_size = 16;
+    }
+    
+    for (i = heap; i <= mem_brk; i++) {
+        if (aligned_size & 1 % 2 == 1) {
+            tracker = 0
+        }
+    }
     return NULL;
 }
 

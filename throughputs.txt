@@ -1,1 +1,2 @@
 Intel(R)Xeon(R)CPUE5-1620v3@3.50GHz:regular:20092
+AMDRyzen96900HSwithRadeonGraphics:regular:33548
