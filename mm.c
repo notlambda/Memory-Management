@@ -70,7 +70,42 @@ bool mm_init(void)
  */
 void* malloc(size_t size)
 {
+    uint64_t aligned_size;
     /* IMPLEMENT THIS */
+    if (size == 0) {
+        return NULL;
+    }
+
+    uint64_t *i;  
+    uint64_t tracker = 0;
+    int head
+    
+    if (size > 16) {
+        aligned_size = align(size);
+    } else {
+        aligned_size = 16;
+    }
+    
+    for (i = heap; i <= mem_brk; i++) {
+        if (tracker == aligned_size) {
+            return head;
+        }
+        if (aligned_size & 1 % 2 == 1) {
+            tracker = 0
+        } else {
+            if (tracker == 0) {
+                head = i;
+            }
+            tracker += 1
+        }
+        uint64_t *result = mem_sbrk(aligned_size);
+        if result == -1{
+            return NULL;
+        } else{
+            return result;
+        }
+
+    }
     return NULL;
 }
 
