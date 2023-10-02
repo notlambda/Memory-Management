@@ -1,7 +1,7 @@
 /*
  * mm.c
  *
- * Name: [FILL IN]
+ * Name: [Anh Nguyen & Andrew Latini]
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
@@ -50,6 +50,15 @@
 /* What is the correct alignment? */
 #define ALIGNMENT 16
 
+typedef struct block {
+    size_t size;
+    uint64_t *head;
+    struct block* next;
+}block_t;
+
+block_t* head_block;
+
+
 /* rounds up to the nearest multiple of ALIGNMENT */
 static size_t align(size_t x)
 {
@@ -62,6 +71,8 @@ static size_t align(size_t x)
 bool mm_init(void)
 {
     /* IMPLEMENT THIS */
+    head_block = NULL;
+
     return true;
 }
 
@@ -70,44 +81,66 @@ bool mm_init(void)
  */
 void* malloc(size_t size)
 {
-    uint64_t aligned_size;
+    uint64_t aligned_size; 
     /* IMPLEMENT THIS */
-    if (size == 0) {
+    if (size == 0) {    // returns NULL if size is 0
         return NULL;
     }
 
-    uint64_t *i;  
-    uint64_t tracker = 0;
-    int head
-    
-    if (size > 16) {
+    void *i;                                    // the current pointer use for the for loop
+    uint64_t tracker = 0;                    // tracks number of consecutive free blocks in the loop
+    void *head = mem_heap_lo();                   //  the starting address of the heap
+
+    if (size > 16) {                                 // aligned size needs to be 16, so if not, the function help allign the size
         aligned_size = align(size);
-    } else {
+    } else {                                        // else we assign it 16
         aligned_size = 16;
     }
     
-    for (i = heap; i <= mem_brk; i++) {
-        if (tracker == aligned_size) {
+    for (i = mem_heap_lo(); i <= mem_heap_hi(); i++) {  // a for loop to look into the heap
+        if (tracker == aligned_size) {                  // check if tracker reach the number of blocks we need, it returns the head pointer
+            static block_t block;
+            block.size = aligned_size;
+            block.head = head;
+            block.next = NULL;                         
+            if (head_block == NULL) {                   // creates a block
+                head_block = &block;
+                }else {
+                    head_block->next = &block;
+                }
+            }
             return head;
         }
-        if (aligned_size & 1 % 2 == 1) {
-            tracker = 0
-        } else {
+        
+        if (((aligned_size & 1) % 2) == 1) {    // is the least significant bit is odd, we know its being used
+                                               // hence we reset tracker
+            tracker = 0;
+        } else {                                // else it iterates the tracker, and reset head if tracker returns zero 
             if (tracker == 0) {
                 head = i;
             }
-            tracker += 1
-        }
-        uint64_t *result = mem_sbrk(aligned_size);
-        if result == -1{
-            return NULL;
-        } else{
-            return result;
+            tracker += 1;
         }
 
-    }
+        uint64_t *result = mem_sbrk(aligned_size);    
+        if (result == (void *) -1) {                    // if we couldnt find the block in the heap, 
+                                                        // we resort to mem_sbrk to add more memory to the heap
+                                                        // and if mem_sbrk fail, we return NULL
+            return NULL;
+        } else{
+            static block_t block;
+            block.size = aligned_size;
+            block.head = head;
+            block.next = NULL;                         // recreates the block after adding more memory
+            if (head_block == NULL) {
+                head_block = &block;
+                }else {
+                    head_block->next = &block;
+                }
+            return result;
+        }
     return NULL;
-}
+    }
 
 /*
  * free
@@ -115,6 +148,7 @@ void* malloc(size_t size)
 void free(void* ptr)
 {
     /* IMPLEMENT THIS */
+
     return;
 }
 
