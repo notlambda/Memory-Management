@@ -1,6 +1,6 @@
 # Checkpoint 1 Work
 
-Add description here
+implemented the general idea for malloc
 
 # Final Submission Work
 
