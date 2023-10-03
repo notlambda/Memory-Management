@@ -264,6 +264,42 @@ void free(void* ptr)
 void* realloc(void* oldptr, size_t size)
 {
     /* IMPLEMENT THIS */
+    if (oldptr == NULL) {
+        return malloc(size);
+    }
+
+    if (size == 0) {
+        free(oldptr);
+        return NULL;
+    }
+
+    size_t old_size = GET_SIZE(HDRP(oldptr));
+    
+    if (oldptr != NULL) {           // Three cases if oldptr is not NULL
+
+        if (old_size == size) {     // Case 1: if old size is equal to new size, return same ptr
+            return oldptr;
+        }
+
+        else if (old_size < size) {     // Case 2: if old size is less than new size, 
+            void* new_ptr = malloc(size);       // malloc the new size,
+
+            if (new_ptr == NULL) {          // if new_ptr equal null, then malloc failed, return null
+                return NULL;
+            }
+
+            memcpy(new_ptr, oldptr, old_size);     // copy data from oldptr to new ptr
+            free(oldptr);                          // free data from the oldptr
+
+            return new_ptr;                 // return ptr to newly allocated memory        
+        }
+
+        else if (old_size > size) {     // Case 3:
+            
+        }
+
+    }
+
     return NULL;
 }
 
