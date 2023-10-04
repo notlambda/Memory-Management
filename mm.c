@@ -52,7 +52,9 @@
 
 
 static char *heap_listp;		// heap pointer
-
+static size_t DW_SIZE = 16;     // double word size is equal 16
+static size_t W_SIZE = 8;       // each word size is equal to 8
+static size_t CHUNKSIZE = (1<<12);
 /* **** HELPER FUNCTIONS ************************* */
 
 /* rounds up to the nearest multiple of ALIGNMENT */
@@ -63,6 +65,7 @@ static size_t align(size_t x)
 
 static size_t GET (char *p)			// read word at address p
 {
+    // printf("p: %p\n", p);
 	return (*(size_t *)(p));
 }
 
@@ -71,34 +74,83 @@ static void PUT(char *p, size_t val)		// write word at address p
 	(*(size_t *)(p)) = val;
 }
 
-static uint64_t GET_SIZE(char *p)		// read size at address p
+static size_t GET_SIZE(char *p)		// read size at address p
 {
-	return (uint64_t)GET(p) & ~0x7;
+	return (GET(p) & ~0xf);
 }
 
 static char *HDRP(char *bp)			// get address of header with block ptr
 {
-	return ((char *)(bp) - 4);
+	return ((char *)(bp) - W_SIZE);
 }
 
 static char *FTRP(char *bp)			// get address of footer with block ptr
 {
-	return ((char *)(bp) + GET_SIZE(HDRP(bp)));
+	return ((char *)(bp) + GET_SIZE(HDRP(bp)) - DW_SIZE);
 }
 
 static char *NEXT_BLKP(char *bp)		// get address of next block using block ptr
 {
-	return ((char *)(bp) + GET_SIZE(HDRP(bp)) + ALIGNMENT);
+	return (char *)(bp) + GET_SIZE(HDRP(bp));
 }
 
 static char *PREV_BLKP(char *bp)		// get address of previous blk using block ptr
 {
-	return ((char *)(bp) - (GET_SIZE(((char *)(bp) - ALIGNMENT)) + ALIGNMENT));
+	return (char *)(bp) - GET_SIZE((char *)bp - DW_SIZE);
 }
 
 static uint64_t GET_ALLOC(char *p)		// read allocated field from address p
 {
-	return (uint64_t)GET(p) & 0x1;
+	return (GET(p) & 0x1);
+}
+
+static int MAX (size_t x, size_t y) 
+{
+    return (x > y) ? x : y;             // if x is greater than y, returns x. else return y
+}
+
+static void *search_fit(size_t aligned_size)
+{
+    char *bp;
+
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0UL; bp = (char *)NEXT_BLKP(bp))
+    {
+        // size_t csize = GET_SIZE(HDRP(bp));
+        if (!GET_ALLOC(HDRP(bp)) && (aligned_size <= GET_SIZE(HDRP(bp))))
+        {
+            // printf("csize: %lu\n", csize);
+            return bp;
+        }
+    }
+    return NULL;
+}
+
+
+static size_t PACK(size_t size, size_t alloc)
+{
+    return  ((size) | (alloc));
+}
+
+static void place(void *bp, size_t aligned_size)
+{
+    size_t csize = GET_SIZE(HDRP(bp));
+
+    size_t remSize = csize - aligned_size; 
+    // printf("cSize: %lu aligned_size: %lu remSize: %lu\n", csize, aligned_size, remSize);
+    if (remSize >= (2 * DW_SIZE))
+    {
+        PUT(HDRP(bp), PACK(aligned_size, 1));
+        PUT(FTRP(bp), PACK(aligned_size, 1));
+        bp = NEXT_BLKP(bp);
+
+        PUT(HDRP(bp), PACK(remSize, 0));
+        PUT(FTRP(bp), PACK(remSize, 0));
+    }
+    else
+    {
+        PUT(HDRP(bp), PACK(csize, 1));
+        PUT(FTRP(bp), PACK(csize, 1));
+    }
 }
 
 /* END OF HELPER FUNCTIONS */
@@ -108,6 +160,7 @@ static void *coalesce(void *bp)
 {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+    // printf("prev block: %p and prev_alloc:%lu\n", PREV_BLKP(bp), prev_alloc);
 	size_t size = GET_SIZE(HDRP(bp));
 	
 	if (prev_alloc && next_alloc)			// Case 1: if adjacent blocks are both
@@ -123,6 +176,7 @@ static void *coalesce(void *bp)
 	else if (!prev_alloc && next_alloc)		// Case 3: if prev blk free but next blk is allocated
 	{
 		size+=GET_SIZE(HDRP(PREV_BLKP(bp)));	// add header of free block size to size
+        // printf("new size: %lu\n", size);
 		PUT(FTRP(bp), (size|0));		// write size to footer
 		PUT(HDRP(PREV_BLKP(bp)), (size|0));	// write size to free blk's header
 		bp = PREV_BLKP(bp);			// set blk ptr to the free blk
@@ -145,39 +199,62 @@ static void *extend_heap(size_t words)
 	size_t size;
 	
 	if (words%2)					// if odd
-		size=(words+1)*4;			// add 1 to make even and align to 4 byte word
+		size=(words+1)*W_SIZE;			// add 1 to make even and align to 4 byte word
 	else						// to maintain alignment
-		size=words*4;				// otherwise just align to 4 byte word
+		size=words*W_SIZE;				// otherwise just align to 4 byte word
+    // printf("extend heap called size: %lu\n", size);
 	if ((long)(bp=mem_sbrk(size)) == -1)		// if heap extension of size fails
 		return NULL;				// :return NULL
+    // printf("bp: %p size: %lu\n", (char *)bp, GET_SIZE(HDRP(bp)));
 	PUT(HDRP(bp), (size|0));			// else: write size to header of blk ptr
 	PUT(FTRP(bp), (size|0));			// 	 write size to footer of blk ptr
+    // printf("size of bp: %lu", GET_SIZE(HDRP(bp)));
 	PUT(HDRP(NEXT_BLKP(bp)), (0|1));		// write 1 to header of next blk to show allocation
 	
 	return coalesce(bp);				// coalesce any free blocks of newly extended heap
+    // return bp;
 }
 
 /*
  * Initialize: returns false on error, true on success.
  */
+// bool mm_init(void)
+// {
+
+//     	/* IMPLEMENT THIS */
+//     	heap_listp = mem_sbrk(4 * W_SIZE);			// allocate 16 bytes and set returned ptr to heap ptr
+//     	if ((heap_listp) == (void *)-1)			// check if failed
+//     		return -1;				// return false if failed
+//     	(*(size_t *)(heap_listp)) = 0;			// Alignment padding
+//     	(*(size_t *)(heap_listp+4)) = (8|1);		// Prologue header
+//     	(*(size_t *)(heap_listp+(8))) = (8|1);		// Prologue footer
+//     	(*(size_t *)(heap_listp+(12))) = (0|1);		// Epilogue header
+//     	heap_listp+=8;
+    	
+//     	if (extend_heap(1024) == NULL)			// extend empty heap with free block of 4096 bytes (1024 words)
+//     		return false;				// if failed return false
+//     	return true;					// otherwise return success
+    	
+// }
+
 bool mm_init(void)
 {
+ /* Create the initial empty heap */
+    if ((heap_listp = mem_sbrk(4*W_SIZE)) == (void *)-1)
+        return -1;
+    PUT(heap_listp, 0); /* Alignment padding */
+    PUT(heap_listp + (1*W_SIZE), PACK(DW_SIZE, 1)); /* Prologue header */
+    PUT(heap_listp + (2*W_SIZE), PACK(DW_SIZE, 1)); /* Prologue footer */
+    PUT(heap_listp + (3*W_SIZE), PACK(0, 1)); /* Epilogue header */
+    heap_listp += (2*W_SIZE);
+    // printf("heap_listp: %p\n", heap_listp);
 
-    	/* IMPLEMENT THIS */
-    	heap_listp = mem_sbrk(16);			// allocate 16 bytes and set returned ptr to heap ptr
-    	if ((heap_listp) == (void *)-1)			// check if failed
-    		return false;				// return false if failed
-    	(*(size_t *)(heap_listp)) = 0;			// Alignment padding
-    	(*(size_t *)(heap_listp+4)) = (8|1);		// Prologue header
-    	(*(size_t *)(heap_listp+(8))) = (8|1);		// Prologue footer
-    	(*(size_t *)(heap_listp+(12))) = (0|1);		// Epilogue header
-    	heap_listp+=8;
-    	
-    	if (extend_heap(1024) == NULL)			// extend empty heap with free block of 4096 bytes (1024 words)
-    		return false;				// if failed return false
-    	return true;					// otherwise return success
-    	
+ /* Extend the empty heap with a free block of CHUNKSIZE bytes */
+    if (extend_heap(CHUNKSIZE/W_SIZE) == NULL)
+        return 0;
+    return 1;
 }
+
 
 
 /*
@@ -185,76 +262,62 @@ bool mm_init(void)
  */
 void* malloc(size_t size)
 {
+    size_t aligned_size = size; 
+    size_t extend_size;
+    char *bp;
 
-    uint64_t aligned_size; 
     /* IMPLEMENT THIS */
     if (size == 0) {    // returns NULL if size is 0
         return NULL;
     }
 
-    void *i;                                    // the current pointer use for the for loop
-    uint64_t tracker = 0;                    // tracks number of consecutive free blocks in the loop
-    void *head = mem_heap_lo();                   //  the starting address of the heap
-
-    if (size > 16) {                                 // aligned size needs to be 16, so if not, the function help allign the size
-        aligned_size = align(size);
-    } else {                                        // else we assign it 16
-        aligned_size = 16;
+    if (size <= DW_SIZE) {              // adjust block size and align the size
+        aligned_size = 2 * DW_SIZE;
     }
-    
-    for (i = mem_heap_lo(); i <= mem_heap_hi(); i++) {  // a for loop to look into the heap
-        if (tracker == aligned_size) {                  // check if tracker reach the number of blocks we need, it returns the head pointer
-            static block_t block;
-            block.size = aligned_size;
-            block.head = head;
-            block.next = NULL;                         
-            if (head_block == NULL) {                   // creates a block
-                head_block = &block;
-                }else {
-                    head_block->next = &block;
-                }
-            }
-            return head;
-        }
-        
-        if (((aligned_size & 1) % 2) == 1) {    // is the least significant bit is odd, we know its being used
-                                               // hence we reset tracker
-            tracker = 0;
-        } else {                                // else it iterates the tracker, and reset head if tracker returns zero 
-            if (tracker == 0) {
-                head = i;
-            }
-            tracker += 1;
-        }
-
-        uint64_t *result = mem_sbrk(aligned_size);    
-        if (result == (void *) -1) {                    // if we couldnt find the block in the heap, 
-                                                        // we resort to mem_sbrk to add more memory to the heap
-                                                        // and if mem_sbrk fail, we return NULL
-            return NULL;
-        } else{
-            static block_t block;
-            block.size = aligned_size;
-            block.head = head;
-            block.next = NULL;                         // recreates the block after adding more memory
-            if (head_block == NULL) {
-                head_block = &block;
-                }else {
-                    head_block->next = &block;
-                }
-            return result;
-        }
-    return NULL;
+    else {
+        aligned_size = DW_SIZE + align(aligned_size);
     }
+
+    // printf("aligned size: %lu\n", aligned_size);
+
+    if ((bp = search_fit(aligned_size)) != NULL)  {
+        // printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
+        place(bp, aligned_size);
+        // printf("alloc done for bp: %p\n", bp);
+        return bp;
+    }
+
+
+    extend_size = aligned_size > CHUNKSIZE ? aligned_size : CHUNKSIZE;
+    // printf("aligned_size: %lu extend_size: %lu\n", aligned_size, extend_size);
+    if ((bp = extend_heap(extend_size/W_SIZE)) == NULL) {
+        return NULL;
+    }
+
+    // printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
+    place(bp, aligned_size);
+    // printf("alloc done for bp: %p\n", bp);
+    return bp;
+}
 
 /*
  * free
  */
 void free(void* ptr)
 {
+    // printf("free called\n");
     /* IMPLEMENT THIS */
+    if (ptr == NULL)
+    {
+        return;
+    }
 
-    return;
+    size_t size = GET_SIZE(HDRP(ptr));
+    // printf("size: %lu\n", size);
+    PUT(HDRP(ptr), PACK(size, 0));
+    PUT(FTRP(ptr), PACK(size, 0));
+    coalesce(ptr);
+    // return ptr;
 
 }
 
@@ -264,6 +327,7 @@ void free(void* ptr)
 void* realloc(void* oldptr, size_t size)
 {
     /* IMPLEMENT THIS */
+    // printf("realloc called\n");
     if (oldptr == NULL) {
         return malloc(size);
     }
@@ -273,34 +337,21 @@ void* realloc(void* oldptr, size_t size)
         return NULL;
     }
 
-    size_t old_size = GET_SIZE(HDRP(oldptr));
-    
-    if (oldptr != NULL) {           // Three cases if oldptr is not NULL
+    void* new_ptr = malloc(size);       // malloc the new size,
 
-        if (old_size == size) {     // Case 1: if old size is equal to new size, return same ptr
-            return oldptr;
-        }
-
-        else if (old_size < size) {     // Case 2: if old size is less than new size, 
-            void* new_ptr = malloc(size);       // malloc the new size,
-
-            if (new_ptr == NULL) {          // if new_ptr equal null, then malloc failed, return null
-                return NULL;
-            }
-
-            memcpy(new_ptr, oldptr, old_size);     // copy data from oldptr to new ptr
-            free(oldptr);                          // free data from the oldptr
-
-            return new_ptr;                 // return ptr to newly allocated memory        
-        }
-
-        else if (old_size > size) {     // Case 3:
-            
-        }
-
+    if (new_ptr == NULL) {          // if new_ptr equal null, then malloc failed, return null
+        return NULL;
     }
 
-    return NULL;
+    size_t old_size = GET_SIZE(HDRP(oldptr));
+    if (old_size > size) {     // Case 2: if old size is less than new size, 
+        old_size = size;
+    }
+
+    memcpy(new_ptr, oldptr, old_size);     // copy data from oldptr to new ptr
+    free(oldptr);                          // free data from the oldptr
+
+    return new_ptr;                 // return ptr to newly allocated memory        
 }
 
 /*
