@@ -113,16 +113,16 @@ static void *search_fit(size_t aligned_size)
 {
     char *bp;
 
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0UL; bp = (char *)NEXT_BLKP(bp))
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0UL; bp = (char *)NEXT_BLKP(bp))		// loop through free list to find a fit
     {
         // size_t csize = GET_SIZE(HDRP(bp));
-        if (!GET_ALLOC(HDRP(bp)) && (aligned_size <= GET_SIZE(HDRP(bp))))
+        if (!GET_ALLOC(HDRP(bp)) && (aligned_size <= GET_SIZE(HDRP(bp))))		// if fit found return a pointer to that block
         {
             // printf("csize: %lu\n", csize);
             return bp;
         }
     }
-    return NULL;
+    return NULL;									// otherwise return NULL
 }
 
 
@@ -137,18 +137,18 @@ static void place(void *bp, size_t aligned_size)
 
     size_t remSize = csize - aligned_size; 
     // printf("cSize: %lu aligned_size: %lu remSize: %lu\n", csize, aligned_size, remSize);
-    if (remSize >= (2 * DW_SIZE))
+    if (remSize >= (2 * DW_SIZE)) 		// splitting the block
     {
-        PUT(HDRP(bp), PACK(aligned_size, 1));
+        PUT(HDRP(bp), PACK(aligned_size, 1));		// takes in size and OR with 1, and store 
         PUT(FTRP(bp), PACK(aligned_size, 1));
-        bp = NEXT_BLKP(bp);
+        bp = NEXT_BLKP(bp);				// allocate the first half and freeing the second half
 
-        PUT(HDRP(bp), PACK(remSize, 0));
+        PUT(HDRP(bp), PACK(remSize, 0));		// put remSize in header and footer
         PUT(FTRP(bp), PACK(remSize, 0));
     }
     else
     {
-        PUT(HDRP(bp), PACK(csize, 1));
+        PUT(HDRP(bp), PACK(csize, 1));			// otherwise put csize in header and footer
         PUT(FTRP(bp), PACK(csize, 1));
     }
 }
@@ -218,43 +218,24 @@ static void *extend_heap(size_t words)
 /*
  * Initialize: returns false on error, true on success.
  */
-// bool mm_init(void)
-// {
-
-//     	/* IMPLEMENT THIS */
-//     	heap_listp = mem_sbrk(4 * W_SIZE);			// allocate 16 bytes and set returned ptr to heap ptr
-//     	if ((heap_listp) == (void *)-1)			// check if failed
-//     		return -1;				// return false if failed
-//     	(*(size_t *)(heap_listp)) = 0;			// Alignment padding
-//     	(*(size_t *)(heap_listp+4)) = (8|1);		// Prologue header
-//     	(*(size_t *)(heap_listp+(8))) = (8|1);		// Prologue footer
-//     	(*(size_t *)(heap_listp+(12))) = (0|1);		// Epilogue header
-//     	heap_listp+=8;
-    	
-//     	if (extend_heap(1024) == NULL)			// extend empty heap with free block of 4096 bytes (1024 words)
-//     		return false;				// if failed return false
-//     	return true;					// otherwise return success
-    	
-// }
 
 bool mm_init(void)
 {
  /* Create the initial empty heap */
-    if ((heap_listp = mem_sbrk(4*W_SIZE)) == (void *)-1)
+    if ((heap_listp = mem_sbrk(4*W_SIZE)) == (void *)-1)	
         return -1;
     PUT(heap_listp, 0); /* Alignment padding */
     PUT(heap_listp + (1*W_SIZE), PACK(DW_SIZE, 1)); /* Prologue header */
     PUT(heap_listp + (2*W_SIZE), PACK(DW_SIZE, 1)); /* Prologue footer */
-    PUT(heap_listp + (3*W_SIZE), PACK(0, 1)); /* Epilogue header */
-    heap_listp += (2*W_SIZE);
-    // printf("heap_listp: %p\n", heap_listp);
+	    PUT(heap_listp + (3*W_SIZE), PACK(0, 1)); /* Epilogue header */
+	    heap_listp += (2*W_SIZE);
+	    // printf("heap_listp: %p\n", heap_listp);
 
- /* Extend the empty heap with a free block of CHUNKSIZE bytes */
-    if (extend_heap(CHUNKSIZE/W_SIZE) == NULL)
+	 /* Extend the empty heap with a free block of CHUNKSIZE bytes */
+	    if (extend_heap(CHUNKSIZE/W_SIZE) == NULL)
         return 0;
     return 1;
 }
-
 
 
 /*
@@ -280,7 +261,7 @@ void* malloc(size_t size)
 
     // printf("aligned size: %lu\n", aligned_size);
 
-    if ((bp = search_fit(aligned_size)) != NULL)  {
+    if ((bp = search_fit(aligned_size)) != NULL)  {		// check if there is a fit
         // printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
         place(bp, aligned_size);
         // printf("alloc done for bp: %p\n", bp);
@@ -288,14 +269,14 @@ void* malloc(size_t size)
     }
 
 
-    extend_size = aligned_size > CHUNKSIZE ? aligned_size : CHUNKSIZE;
+    extend_size = aligned_size > CHUNKSIZE ? aligned_size : CHUNKSIZE;			// otherwise heap must be extended
     // printf("aligned_size: %lu extend_size: %lu\n", aligned_size, extend_size);
-    if ((bp = extend_heap(extend_size/W_SIZE)) == NULL) {
-        return NULL;
+    if ((bp = extend_heap(extend_size/W_SIZE)) == NULL) {				// extend heap
+        return NULL;									// if fail return NULL
     }
 
     // printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
-    place(bp, aligned_size);
+    place(bp, aligned_size);								// otherwise place in free block
     // printf("alloc done for bp: %p\n", bp);
     return bp;
 }
