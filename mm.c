@@ -2,11 +2,24 @@
  * mm.c
  *
  * Name: [Anh Nguyen & Andrew Latini]
- *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
- * Also, read the project PDF document carefully and in its entirety before beginning.
- *
+ * Program Description:
+ *      For this project we implemented a dynamic storage allocator in C.
+ *      We created our own malloc, realloc, and free fuctions, using any 
+ *      helper functions as necessary. The heap is initialized as an empty
+ *      heap of free blocks. 
+ *      Malloc is an application that requests a block of size bytes.
+ *      Upon checking for invalid requests, the requested block size
+ *      is adjusted to allow room for the header and footer, while 
+ *      satisfying the double-word alignment. A minimum block size of
+ *      16 is enforced, 8 bytes for the alignment and another 8 for the
+ *      header and footer. Any request greater than 8 bytes is added with
+ *      the header/footer bytes and rounded to the nearest multiple of 8.
+ *      Once it has adjusted to the correct size, it searches for the free 
+ *      list for a suitable free block. If there is a fit, the block is
+ *      placed and any excess is split. Finally, the address of the new 
+ *      block is returned. If there is no fit, the heap is extended with 
+ *      a new free block and places the requested block in that free block.
+ * We reference our work from the textbook.
  */
 #include <assert.h>
 #include <stdio.h>
