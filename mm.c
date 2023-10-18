@@ -65,9 +65,10 @@
 
 
 static char *heap_listp;		// heap pointer
-static size_t DW_SIZE = 16;     // double word size is equal 16
-static size_t W_SIZE = 8;       // each word size is equal to 8
-static size_t CHUNKSIZE = (1<<12);
+static char *freePtr = 0;		// free list ptr = start of explicit list
+static size_t DW_SIZE = 16;     	// double word size is equal 16
+static size_t W_SIZE = 8;       	// each word size is equal to 8
+static size_t CHUNKSIZE = (1<<12);	// chunk size = 4kb
 /* **** HELPER FUNCTIONS ************************* */
 
 /* rounds up to the nearest multiple of ALIGNMENT */
@@ -116,6 +117,34 @@ static uint64_t GET_ALLOC(char *p)		// read allocated field from address p
 {
 	return (GET(p) & 0x1);
 }
+
+static char **NEXT_PTR(char *bp)
+{
+	return ((char **)(bp+W_SIZE));		// point to next ptr of free list
+}
+
+static char **PREV_PTR(char *bp)
+{
+	return ((char **)(bp));			// point to previous ptr of free list
+}
+
+static void free_add(char *bp)
+{
+	char **nextPtr = NEXT_PTR(bp);		// gets next ptr of new free
+	*nextPtr = freePtr;			// sets next ptr to the current free blk
+	
+	if(freePtr)				
+	{
+		char **prevFPtr = PREV_PTR(freePtr);	// gets previous pointer of current free blk
+		*prevPtr = bp;				// sets previous ptr to the new free
+	}
+	
+	char **prevPtr = PREV_PTR(bp);			// get previous ptr of new free
+	*prevPtr = NULL;				// set it to NULL
+	freePtr = bp;					// set current block to new free
+}
+
+
 
 static int MAX (size_t x, size_t y) 
 {
