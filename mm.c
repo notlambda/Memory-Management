@@ -200,15 +200,18 @@ static void place(void *bp, size_t aligned_size)
     {
         PUT(HDRP(bp), PACK(aligned_size, 1));		// takes in size and OR with 1, and store 
         PUT(FTRP(bp), PACK(aligned_size, 1));
+        free_delete(bp);                // delete the free block at address bp
         bp = NEXT_BLKP(bp);				// allocate the first half and freeing the second half
 
         PUT(HDRP(bp), PACK(remSize, 0));		// put remSize in header and footer
         PUT(FTRP(bp), PACK(remSize, 0));
+
     }
     else
     {
         PUT(HDRP(bp), PACK(csize, 1));			// otherwise put csize in header and footer
         PUT(FTRP(bp), PACK(csize, 1));
+        free_delete(bp);                        // delete the free block at address bp
     }
 }
 
@@ -295,6 +298,7 @@ bool mm_init(void)
 	    heap_listp += (2*W_SIZE);
 	    // printf("heap_listp: %p\n", heap_listp);
 
+    freePtr = NULL;         // initialize free list to start of free memory in heap
 	 /* Extend the empty heap with a free block of CHUNKSIZE bytes */
 	    if (extend_heap(CHUNKSIZE/W_SIZE) == NULL)
         return 0;
@@ -336,7 +340,7 @@ void* malloc(size_t size)
     extend_size = aligned_size > CHUNKSIZE ? aligned_size : CHUNKSIZE;			// otherwise heap must be extended
     // printf("aligned_size: %lu extend_size: %lu\n", aligned_size, extend_size);
     if ((bp = extend_heap(extend_size/W_SIZE)) == NULL) {				// extend heap
-        return NULL;									// if fail return NULL
+        return NULL;									               // if fail return NULL
     }
 
     // printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
@@ -388,7 +392,7 @@ void* realloc(void* oldptr, size_t size)
         return NULL;
     }
 
-    size_t old_size = GET_SIZE(HDRP(oldptr));
+    size_t old_size = GET_SIZE(HDRP(oldptr));           // set old size to size of old ptr     
     if (old_size > size) {     // Case 2: if old size is less than new size, 
         old_size = size;
     }
