@@ -136,7 +136,7 @@ static void free_add(char *bp)
 	if(freePtr)				
 	{
 		char **prevFPtr = PREV_PTR(freePtr);	// gets previous pointer of current free blk
-		*prevPtr = bp;				// sets previous ptr to the new free
+		*prevFPtr = bp;				// sets previous ptr to the new free
 	}
 	
 	char **prevPtr = PREV_PTR(bp);			// get previous ptr of new free
@@ -144,7 +144,7 @@ static void free_add(char *bp)
 	freePtr = bp;					// set current block to new free
 }
 
-static void free_delete(char *bp)
+static void free_delete(char *ptr)
 {
 	if (*PREV_PTR(ptr) == NULL)				// if first in list
 	{
@@ -228,6 +228,7 @@ static void *coalesce(void *bp)
 	else if (prev_alloc && !next_alloc) 		// Case 2: if prev block is allocated but next blk is free, 
 	{										
 		size+= GET_SIZE(HDRP(NEXT_BLKP(bp))); 	// add size of free blk header to size
+        free_delete(NEXT_BLKP(bp));             // delete previous block from free list
 		PUT(HDRP(bp), (size|0));		// write size to blk ptr header and footer
 		PUT(FTRP(bp), (size|0));		
 	}
@@ -236,6 +237,7 @@ static void *coalesce(void *bp)
 	{
 		size+=GET_SIZE(HDRP(PREV_BLKP(bp)));	// add header of free block size to size
         // printf("new size: %lu\n", size);
+        free_delete(PREV_BLKP(bp));             // delete previous block from free list
 		PUT(FTRP(bp), (size|0));		// write size to footer
 		PUT(HDRP(PREV_BLKP(bp)), (size|0));	// write size to free blk's header
 		bp = PREV_BLKP(bp);			// set blk ptr to the free blk
@@ -243,10 +245,13 @@ static void *coalesce(void *bp)
 	
 	else {										// Case 4: If both blocks free
 		size+=GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));	// add size of previous blk header and next blk footer to size
+        free_delete(PREV_BLKP(bp));                         // delete previous block from free list
+        free_delete(NEXT_BLKP(bp));                         // delete next block from free list
 		PUT(HDRP(PREV_BLKP(bp)), (size|0));					// write size to previous blk header
 		PUT(FTRP(NEXT_BLKP(bp)), (size|0));					// write size to next blk footer
 		bp = PREV_BLKP(bp);							// set blk ptr to previous blk
 	}
+    free_add(bp);               // add blk ptr to free list
 	return bp;					// return the blk ptr
 }
 /*
