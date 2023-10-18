@@ -144,7 +144,24 @@ static void free_add(char *bp)
 	freePtr = bp;					// set current block to new free
 }
 
-
+static void free_delete(char *bp)
+{
+	if (*PREV_PTR(ptr) == NULL)				// if first in list
+	{
+		freePtr = *NEXT_PTR(ptr);			// set current free to next address of deleted block	
+	}
+	else
+	{
+		char **nextPtr = NEXT_PTR(*PREV_PTR(ptr));	// get next pointer of previous block of deleted ptr
+		*nextPtr = *NEXT_PTR(ptr);			// set to next ptr of deleted block
+	}
+	
+	if (*NEXT_PTR(ptr))					
+	{
+		char **prevPtr = PREV_PTR(*NEXT_PTR(ptr));	// get previous ptr of next block of deleted ptr
+		*prevPtr = *PREV_PTR(ptr);			// set to previous ptr of deleted block
+	}	
+}
 
 static int MAX (size_t x, size_t y) 
 {
