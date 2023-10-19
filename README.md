@@ -15,4 +15,16 @@ debugged each function for 100% correctness
 
 # Final Submission Work
 
-Add description here
+Anh:
+Updated the coalesce, place, search fit, init, free functions. 
+Implemented the free delete and add functions into coalesce and place
+Changed the search fit function to look through the freeptr list
+Implemented the next/prev ptr into free function
+Made the checkheap function
+Debugged the code
+
+Andrew:
+Created next and previous pointer functions to return next/prev pointers of explicit free list
+Created add_free and delete_free to add and delete from the free list
+Initialized free list to start of memory in heap
+
