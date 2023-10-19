@@ -130,6 +130,7 @@ static char **PREV_PTR(char *bp)
 
 static void free_add(char *bp)
 {
+    dbg_printf("free_add: %p freePtr: %p\n", bp, freePtr);
 	char **nextPtr = NEXT_PTR(bp);		// gets next ptr of new free
 	*nextPtr = freePtr;			// sets next ptr to the current free blk
 	
@@ -142,13 +143,17 @@ static void free_add(char *bp)
 	char **prevPtr = PREV_PTR(bp);			// get previous ptr of new free
 	*prevPtr = NULL;				// set it to NULL
 	freePtr = bp;					// set current block to new free
+    dbg_printf("freePtr: %p\n", freePtr);
+    mm_checkheap(0);
 }
 
 static void free_delete(char *ptr)
 {
+    dbg_printf("deleting: %p\n", ptr);
 	if (*PREV_PTR(ptr) == NULL)				// if first in list
 	{
-		freePtr = *NEXT_PTR(ptr);			// set current free to next address of deleted block	
+		freePtr = *NEXT_PTR(ptr);			// set current free to next address of deleted block
+        dbg_printf("freePtr: %p\n", ptr);	
 	}
 	else
 	{
@@ -172,12 +177,10 @@ static void *search_fit(size_t aligned_size)
 {
     char *bp;
 
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0UL; bp = (char *)NEXT_BLKP(bp))		// loop through free list to find a fit
+    for (bp = freePtr; bp; bp = *NEXT_PTR(bp))		// loop through free list to find a fit
     {
-        // size_t csize = GET_SIZE(HDRP(bp));
-        if (!GET_ALLOC(HDRP(bp)) && (aligned_size <= GET_SIZE(HDRP(bp))))		// if fit found return a pointer to that block
+        if (aligned_size <= GET_SIZE(HDRP(bp)))		// if fit found return a pointer to that block
         {
-            // printf("csize: %lu\n", csize);
             return bp;
         }
     }
@@ -190,44 +193,18 @@ static size_t PACK(size_t size, size_t alloc)
     return  ((size) | (alloc));
 }
 
-static void place(void *bp, size_t aligned_size)
-{
-    size_t csize = GET_SIZE(HDRP(bp));
-
-    size_t remSize = csize - aligned_size; 
-    // printf("cSize: %lu aligned_size: %lu remSize: %lu\n", csize, aligned_size, remSize);
-    if (remSize >= (2 * DW_SIZE)) 		// splitting the block
-    {
-        PUT(HDRP(bp), PACK(aligned_size, 1));		// takes in size and OR with 1, and store 
-        PUT(FTRP(bp), PACK(aligned_size, 1));
-        free_delete(bp);                // delete the free block at address bp
-        bp = NEXT_BLKP(bp);				// allocate the first half and freeing the second half
-
-        PUT(HDRP(bp), PACK(remSize, 0));		// put remSize in header and footer
-        PUT(FTRP(bp), PACK(remSize, 0));
-
-    }
-    else
-    {
-        PUT(HDRP(bp), PACK(csize, 1));			// otherwise put csize in header and footer
-        PUT(FTRP(bp), PACK(csize, 1));
-        free_delete(bp);                        // delete the free block at address bp
-    }
-}
-
-/* END OF HELPER FUNCTIONS */
-/*****************************************************************************/
-/* Merges adjacent free blocks together */
 static void *coalesce(void *bp)
 {
 	size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
 	size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-    // printf("prev block: %p and prev_alloc:%lu\n", PREV_BLKP(bp), prev_alloc);
+    dbg_printf("prev block: %p and prev_alloc:%lu next block: %p and next_alloc: %lu\n", PREV_BLKP(bp), prev_alloc, NEXT_BLKP(bp), next_alloc);
 	size_t size = GET_SIZE(HDRP(bp));
 	
-	if (prev_alloc && next_alloc)			// Case 1: if adjacent blocks are both
-		return bp;				// allocated, return the block ptr
-		
+	if (prev_alloc && next_alloc) {			// Case 1: if adjacent blocks are both allocated,
+		free_add(bp);                       // add block to free list
+        return bp;				            // return the block ptr
+    }
+
 	else if (prev_alloc && !next_alloc) 		// Case 2: if prev block is allocated but next blk is free, 
 	{										
 		size+= GET_SIZE(HDRP(NEXT_BLKP(bp))); 	// add size of free blk header to size
@@ -239,7 +216,8 @@ static void *coalesce(void *bp)
 	else if (!prev_alloc && next_alloc)		// Case 3: if prev blk free but next blk is allocated
 	{
 		size+=GET_SIZE(HDRP(PREV_BLKP(bp)));	// add header of free block size to size
-        // printf("new size: %lu\n", size);
+        dbg_printf("new size: %lu\n", size);
+        dbg_printf("prev blkp: %p\n", PREV_BLKP(bp));
         free_delete(PREV_BLKP(bp));             // delete previous block from free list
 		PUT(FTRP(bp), (size|0));		// write size to footer
 		PUT(HDRP(PREV_BLKP(bp)), (size|0));	// write size to free blk's header
@@ -257,6 +235,37 @@ static void *coalesce(void *bp)
     free_add(bp);               // add blk ptr to free list
 	return bp;					// return the blk ptr
 }
+
+static void place(void *bp, size_t aligned_size)
+{
+    size_t csize = GET_SIZE(HDRP(bp));
+
+    size_t remSize = csize - aligned_size; 
+    dbg_printf("cSize: %lu aligned_size: %lu remSize: %lu\n", csize, aligned_size, remSize);
+    if (remSize >= (2 * DW_SIZE)) 		// splitting the block
+    {
+        PUT(HDRP(bp), PACK(aligned_size, 1));		// takes in size and OR with 1, and store 
+        PUT(FTRP(bp), PACK(aligned_size, 1));
+        free_delete(bp);                // delete the free block at address bp
+        bp = NEXT_BLKP(bp);				// allocate the first half and freeing the second half
+
+        PUT(HDRP(bp), PACK(remSize, 0));		// put remSize in header and footer
+        PUT(FTRP(bp), PACK(remSize, 0));
+        coalesce(bp);
+
+    }
+    else
+    {
+        PUT(HDRP(bp), PACK(csize, 1));			// otherwise put csize in header and footer
+        PUT(FTRP(bp), PACK(csize, 1));
+        free_delete(bp);                        // delete the free block at address bp
+    }
+}
+
+/* END OF HELPER FUNCTIONS */
+/*****************************************************************************/
+/* Merges adjacent free blocks together */
+
 /*
 *  extends heap by size 'words'
 */
@@ -269,13 +278,13 @@ static void *extend_heap(size_t words)
 		size=(words+1)*W_SIZE;			// add 1 to make even and align to 4 byte word
 	else						// to maintain alignment
 		size=words*W_SIZE;				// otherwise just align to 4 byte word
-    // printf("extend heap called size: %lu\n", size);
+    dbg_printf("extend heap called size: %lu\n", size);
 	if ((long)(bp=mem_sbrk(size)) == -1)		// if heap extension of size fails
 		return NULL;				// :return NULL
-    // printf("bp: %p size: %lu\n", (char *)bp, GET_SIZE(HDRP(bp)));
+    dbg_printf("bp: %p size: %lu\n", (char *)bp, GET_SIZE(HDRP(bp)));
 	PUT(HDRP(bp), (size|0));			// else: write size to header of blk ptr
 	PUT(FTRP(bp), (size|0));			// 	 write size to footer of blk ptr
-    // printf("size of bp: %lu", GET_SIZE(HDRP(bp)));
+    dbg_printf("size of bp: %lu", GET_SIZE(HDRP(bp)));
 	PUT(HDRP(NEXT_BLKP(bp)), (0|1));		// write 1 to header of next blk to show allocation
 	
 	return coalesce(bp);				// coalesce any free blocks of newly extended heap
@@ -302,6 +311,7 @@ bool mm_init(void)
 	 /* Extend the empty heap with a free block of CHUNKSIZE bytes */
 	    if (extend_heap(CHUNKSIZE/W_SIZE) == NULL)
         return 0;
+    mm_checkheap(0);
     return 1;
 }
 
@@ -327,25 +337,28 @@ void* malloc(size_t size)
         aligned_size = DW_SIZE + align(aligned_size);
     }
 
-    // printf("aligned size: %lu\n", aligned_size);
+    dbg_printf("aligned size: %lu\n", aligned_size);
 
     if ((bp = search_fit(aligned_size)) != NULL)  {		// check if there is a fit
-        // printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
+        dbg_printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
         place(bp, aligned_size);
-        // printf("alloc done for bp: %p\n", bp);
+        mm_checkheap(0);
+        dbg_printf("alloc done for bp: %p\n", bp);
         return bp;
     }
 
 
     extend_size = aligned_size > CHUNKSIZE ? aligned_size : CHUNKSIZE;			// otherwise heap must be extended
-    // printf("aligned_size: %lu extend_size: %lu\n", aligned_size, extend_size);
+    dbg_printf("aligned_size: %lu extend_size: %lu\n", aligned_size, extend_size);
     if ((bp = extend_heap(extend_size/W_SIZE)) == NULL) {				// extend heap
         return NULL;									               // if fail return NULL
     }
 
-    // printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
+    mm_checkheap(0);
+    dbg_printf("bp size: %lu\n", GET_SIZE(HDRP(bp)));
     place(bp, aligned_size);								// otherwise place in free block
-    // printf("alloc done for bp: %p\n", bp);
+    mm_checkheap(0);
+    dbg_printf("alloc done for bp: %p\n", bp);
     return bp;
 }
 
@@ -354,7 +367,6 @@ void* malloc(size_t size)
  */
 void free(void* ptr)
 {
-    // printf("free called\n");
     /* IMPLEMENT THIS */
     if (ptr == NULL)
     {
@@ -362,10 +374,14 @@ void free(void* ptr)
     }
 
     size_t size = GET_SIZE(HDRP(ptr));
-    // printf("size: %lu\n", size);
+    dbg_printf("free called for %p of size: %lu\n", (char *)ptr, size);
+    dbg_printf("size: %lu\n", size);
     PUT(HDRP(ptr), PACK(size, 0));
     PUT(FTRP(ptr), PACK(size, 0));
+    *NEXT_PTR(ptr) = NULL;
+    *PREV_PTR(ptr) = NULL;
     coalesce(ptr);
+    mm_checkheap(0);
     // return ptr;
 
 }
@@ -376,7 +392,7 @@ void free(void* ptr)
 void* realloc(void* oldptr, size_t size)
 {
     /* IMPLEMENT THIS */
-    // printf("realloc called\n");
+    dbg_printf("realloc called\n");
     if (oldptr == NULL) {
         return malloc(size);
     }
@@ -386,7 +402,7 @@ void* realloc(void* oldptr, size_t size)
         return NULL;
     }
 
-    void* new_ptr = malloc(size);       // malloc the new size,
+    char* new_ptr = malloc(size);       // malloc the new size,
 
     if (new_ptr == NULL) {          // if new_ptr equal null, then malloc failed, return null
         return NULL;
@@ -443,6 +459,25 @@ static bool aligned(const void* p)
 bool mm_checkheap(int lineno)
 {
 #ifdef DEBUG
+    char* bp;
+    
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) != 0; bp = NEXT_BLKP(bp))          // loops through the heap while the header is not equal to zero
+    {
+        if (GET_ALLOC(HDRP(bp)))                                                // checks if the block is allocated   
+        {
+            printf("Allocated Block: %p of size: %lu/n", bp, GET_SIZE(HDRP(bp)));       // prints the address of the block and the size of the block
+        }
+        else 
+        {
+            printf("Free Block: %p of size: %lu\n", bp, GET_SIZE(HDRP(bp)));        // otherwise its a free, so it will print the address and the size of the free block
+        }
+    }
+
+    printf("-------\n");
+    for (bp = freePtr; bp; bp = *NEXT_PTR(bp))                              // loops through the free list 
+    {
+        printf("Free block (explicit list): %p of size: %lu\n", bp, GET_SIZE(HDRP(bp)));        // prints the address of the free block and the size
+    }
     /* Write code to check heap invariants here */
     /* IMPLEMENT THIS */
 #endif /* DEBUG */
